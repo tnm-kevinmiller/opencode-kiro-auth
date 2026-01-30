@@ -60,6 +60,11 @@ export class TokenRefresher {
         this.config.token_expiry_buffer_ms
       )
     ) {
+      // Reset health status since we have fresh credentials
+      stillAcc.isHealthy = true
+      stillAcc.failCount = 0
+      stillAcc.unhealthyReason = undefined
+      await this.repository.batchSave([stillAcc])
       showToast('Credentials recovered from Kiro CLI sync.', 'info')
       return { account: stillAcc, shouldContinue: true }
     }
@@ -69,10 +74,19 @@ export class TokenRefresher {
       (error.code === 'ExpiredTokenException' ||
         error.code === 'InvalidTokenException' ||
         error.code === 'HTTP_401' ||
-        error.code === 'HTTP_403' ||
         error.message.includes('Invalid refresh token provided'))
     ) {
       this.accountManager.markUnhealthy(account, error.message)
+      await this.repository.batchSave(this.accountManager.getAccounts())
+      return { account, shouldContinue: true }
+    }
+
+    // For HTTP_403, only mark unhealthy after multiple failures
+    if (error instanceof KiroTokenRefreshError && error.code === 'HTTP_403') {
+      account.failCount = (account.failCount || 0) + 1
+      if (account.failCount >= 3) {
+        this.accountManager.markUnhealthy(account, error.message)
+      }
       await this.repository.batchSave(this.accountManager.getAccounts())
       return { account, shouldContinue: true }
     }
