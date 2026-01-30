@@ -1,4 +1,4 @@
-export type KiroAuthMethod = 'idc' | 'desktop'
+export type KiroAuthMethod = 'idc' | 'desktop' | 'aws-sso'
 export type KiroRegion = 'us-east-1' | 'us-west-2'
 
 export interface KiroAuthDetails {

@@ -8,8 +8,9 @@ OpenCode plugin for AWS Kiro (CodeWhisperer) providing access to Claude Sonnet a
 
 ## Features
 
-- **Multiple Auth Methods**: Supports AWS Builder ID (IDC) and Kiro Desktop (CLI-based) authentication.
+- **Multiple Auth Methods**: Supports AWS Builder ID (IDC), Kiro Desktop (CLI-based), and AWS SSO authentication.
 - **Auto-Sync Kiro CLI**: Automatically imports and synchronizes active sessions from your local `kiro-cli` SQLite database.
+- **Auto-Sync AWS SSO**: Automatically imports credentials from `~/.aws/sso/cache` for seamless integration with AWS profiles.
 - **Gradual Context Truncation**: Intelligently prevents error 400 by reducing context size dynamically during retries.
 - **Intelligent Account Rotation**: Prioritizes multi-account usage based on lowest available quota.
 - **High-Performance Storage**: Efficient account and usage management using native Bun SQLite.
@@ -73,11 +74,15 @@ Add the plugin to your `opencode.json` or `opencode.jsonc`:
    - Perform login directly in your terminal using `kiro-cli login`.
    - The plugin will automatically detect and import your session on startup.
    - For AWS IAM Identity Center (SSO/IDC), the plugin imports both the token and device registration (OIDC client credentials) from the `kiro-cli` database.
-2. **Direct Authentication**:
+2. **Authentication via AWS SSO**:
+   - Ensure you have AWS SSO configured in `~/.aws/config` with active sessions.
+   - The plugin automatically imports credentials from `~/.aws/sso/cache` on startup.
+   - No additional configuration needed - just use your existing AWS SSO profiles.
+3. **Direct Authentication**:
    - Run `opencode auth login`.
    - Select `Other`, type `kiro`, and press enter.
    - Follow the instructions for **AWS Builder ID (IDC)**.
-3. Configuration will be automatically managed at `~/.config/opencode/kiro.db`.
+4. Configuration will be automatically managed at `~/.config/opencode/kiro.db`.
 
 ## Troubleshooting
 
@@ -98,6 +103,7 @@ The plugin supports extensive configuration options. Edit `~/.config/opencode/ki
 ```json
 {
   "auto_sync_kiro_cli": true,
+  "auto_sync_aws_sso": true,
   "account_selection_strategy": "lowest-usage",
   "default_region": "us-east-1",
   "rate_limit_retry_delay_ms": 5000,
@@ -116,6 +122,7 @@ The plugin supports extensive configuration options. Edit `~/.config/opencode/ki
 ### Configuration Options
 
 - `auto_sync_kiro_cli`: Automatically sync sessions from Kiro CLI (default: `true`).
+- `auto_sync_aws_sso`: Automatically sync credentials from AWS SSO cache (default: `true`).
 - `account_selection_strategy`: Account rotation strategy (`sticky`, `round-robin`, `lowest-usage`).
 - `default_region`: AWS region (`us-east-1`, `us-west-2`).
 - `rate_limit_retry_delay_ms`: Delay between rate limit retries (1000-60000ms).

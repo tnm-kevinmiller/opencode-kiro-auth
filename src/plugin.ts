@@ -1,4 +1,3 @@
-import { KIRO_CONSTANTS } from './constants.js'
 import { AuthHandler } from './core/auth/auth-handler.js'
 import { RequestHandler } from './core/request/request-handler.js'
 import { AccountCache } from './infrastructure/database/account-cache.js'
@@ -26,6 +25,9 @@ export const createKiroPlugin =
     const accountManager = await AccountManager.loadFromDisk(config.account_selection_strategy)
     authHandler.setAccountManager(accountManager)
 
+    // Sync AWS SSO before OpenCode checks for accounts
+    await authHandler.initialize()
+
     const requestHandler = new RequestHandler(accountManager, config, repository)
 
     return {
@@ -33,14 +35,10 @@ export const createKiroPlugin =
         provider: id,
         loader: async (getAuth: any) => {
           await getAuth()
-          await authHandler.initialize()
 
           return {
             apiKey: '',
-            baseURL: KIRO_CONSTANTS.BASE_URL.replace('/generateAssistantResponse', '').replace(
-              '{{region}}',
-              config.default_region || 'us-east-1'
-            ),
+            baseURL: 'https://q.us-east-1.amazonaws.com',
             fetch: (input: any, init?: any) => requestHandler.handle(input, init, showToast)
           }
         },

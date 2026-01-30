@@ -20,6 +20,28 @@ export async function syncFromKiroCli() {
     cliDb.run('PRAGMA busy_timeout = 5000')
     const rows = cliDb.prepare('SELECT key, value FROM auth_kv').all() as any[]
 
+    // Get profile ARN from state table
+    let profileArn: string | undefined
+    let profileRegion: string | undefined
+    try {
+      const stateRow = cliDb
+        .prepare("SELECT value FROM state WHERE key = 'api.codewhisperer.profile'")
+        .get() as any
+      if (stateRow?.value) {
+        const profileData = safeJsonParse(stateRow.value)
+        profileArn = profileData?.arn
+        // Extract region from ARN: arn:aws:codewhisperer:REGION:...
+        if (profileArn) {
+          const arnParts = profileArn.split(':')
+          if (arnParts.length >= 4) {
+            profileRegion = arnParts[3]
+          }
+        }
+      }
+    } catch (e) {
+      logger.debug('Could not read profile from state table', e)
+    }
+
     const deviceRegRow = rows.find(
       (r) => typeof r?.key === 'string' && r.key.includes('device-registration')
     )
@@ -31,10 +53,19 @@ export async function syncFromKiroCli() {
         const data = safeJsonParse(row.value)
         if (!data) continue
 
+        const tokenExpiresAt =
+          normalizeExpiresAt(data.expires_at ?? data.expiresAt) || Date.now() + 3600000
+
+        // Skip expired tokens
+        if (tokenExpiresAt < Date.now()) {
+          logger.debug('Kiro CLI sync: skipping expired token', { key: row.key })
+          continue
+        }
+
         const isIdc = row.key.includes('odic')
         const authMethod = isIdc ? 'idc' : 'desktop'
-        const region = data.region || 'us-east-1'
-        const profileArn = data.profile_arn || data.profileArn
+        const region = profileRegion || data.region || 'us-east-1'
+        const tokenProfileArn = data.profile_arn || data.profileArn || profileArn
 
         const accessToken = data.access_token || data.accessToken || ''
         const refreshToken = data.refresh_token || data.refreshToken
@@ -49,9 +80,6 @@ export async function syncFromKiroCli() {
           continue
         }
 
-        const cliExpiresAt =
-          normalizeExpiresAt(data.expires_at ?? data.expiresAt) || Date.now() + 3600000
-
         let usedCount = 0
         let limitCount = 0
         let email: string | undefined
@@ -61,10 +89,10 @@ export async function syncFromKiroCli() {
           const authForUsage: any = {
             refresh: '',
             access: accessToken,
-            expires: cliExpiresAt,
+            expires: tokenExpiresAt,
             authMethod,
             region,
-            profileArn,
+            profileArn: tokenProfileArn,
             clientId,
             clientSecret,
             email: ''
@@ -87,8 +115,10 @@ export async function syncFromKiroCli() {
         const all = kiroDb.getAccounts()
         if (!email) {
           let existing: any | undefined
-          if (profileArn) {
-            existing = all.find((a) => a.auth_method === authMethod && a.profile_arn === profileArn)
+          if (tokenProfileArn) {
+            existing = all.find(
+              (a) => a.auth_method === authMethod && a.profile_arn === tokenProfileArn
+            )
           }
           if (!existing && authMethod === 'idc' && clientId) {
             existing = all.find((a) => a.auth_method === 'idc' && a.client_id === clientId)
@@ -96,29 +126,39 @@ export async function syncFromKiroCli() {
           if (existing && typeof existing.email === 'string' && existing.email) {
             email = existing.email
           } else {
-            email = makePlaceholderEmail(authMethod, region, clientId, profileArn)
+            email = makePlaceholderEmail(authMethod, region, clientId, tokenProfileArn)
           }
         }
 
         const resolvedEmail =
-          email || makePlaceholderEmail(authMethod, region, clientId, profileArn)
+          email || makePlaceholderEmail(authMethod, region, clientId, tokenProfileArn)
 
-        const id = createDeterministicAccountId(resolvedEmail, authMethod, clientId, profileArn)
+        const id = createDeterministicAccountId(
+          resolvedEmail,
+          authMethod,
+          clientId,
+          tokenProfileArn
+        )
         const existingById = all.find((a) => a.id === id)
         if (
           existingById &&
           existingById.is_healthy === 1 &&
-          existingById.expires_at >= cliExpiresAt
+          existingById.expires_at >= tokenExpiresAt
         )
           continue
 
         if (usageOk) {
-          const placeholderEmail = makePlaceholderEmail(authMethod, region, clientId, profileArn)
+          const placeholderEmail = makePlaceholderEmail(
+            authMethod,
+            region,
+            clientId,
+            tokenProfileArn
+          )
           const placeholderId = createDeterministicAccountId(
             placeholderEmail,
             authMethod,
             clientId,
-            profileArn
+            tokenProfileArn
           )
           if (placeholderId !== id) {
             const placeholderRow = all.find((a) => a.id === placeholderId)
@@ -130,10 +170,10 @@ export async function syncFromKiroCli() {
                 region: placeholderRow.region || region,
                 clientId,
                 clientSecret,
-                profileArn,
+                profileArn: tokenProfileArn,
                 refreshToken: placeholderRow.refresh_token || refreshToken,
                 accessToken: placeholderRow.access_token || accessToken,
-                expiresAt: placeholderRow.expires_at || cliExpiresAt,
+                expiresAt: placeholderRow.expires_at || tokenExpiresAt,
                 rateLimitResetTime: 0,
                 isHealthy: false,
                 failCount: 10,
@@ -154,10 +194,10 @@ export async function syncFromKiroCli() {
           region,
           clientId,
           clientSecret,
-          profileArn,
+          profileArn: tokenProfileArn,
           refreshToken,
           accessToken,
-          expiresAt: cliExpiresAt,
+          expiresAt: tokenExpiresAt,
           rateLimitResetTime: 0,
           isHealthy: true,
           failCount: 0,

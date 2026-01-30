@@ -1,5 +1,6 @@
 import type { AccountRepository } from '../../infrastructure/database/account-repository.js'
 import { IdcAuthMethod } from './idc-auth-method.js'
+import { KiroCliAuthMethod } from './kiro-cli-auth-method.js'
 
 export class AuthHandler {
   private accountManager?: any
@@ -11,10 +12,7 @@ export class AuthHandler {
 
   async initialize(): Promise<void> {
     const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
-
-    if (this.config.auto_sync_kiro_cli) {
-      await syncFromKiroCli()
-    }
+    await syncFromKiroCli()
   }
 
   setAccountManager(am: any): void {
@@ -32,11 +30,18 @@ export class AuthHandler {
     }
 
     const idcMethod = new IdcAuthMethod(this.config, this.repository)
+    const kiroCliMethod = new KiroCliAuthMethod(this.config, this.repository)
 
     return [
       {
+        id: 'kiro-cli',
+        label: 'Kiro CLI (IAM Identity Center)',
+        type: 'oauth',
+        authorize: () => kiroCliMethod.authorize()
+      },
+      {
         id: 'idc',
-        label: 'AWS Builder ID (IDC)',
+        label: 'AWS Builder ID (Direct)',
         type: 'oauth',
         authorize: (inputs?: any) => idcMethod.authorize(inputs)
       }
