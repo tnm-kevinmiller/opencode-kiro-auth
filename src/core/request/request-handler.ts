@@ -70,6 +70,24 @@ export class RequestHandler {
       }
 
       if (this.allAccountsPermanentlyUnhealthy()) {
+        // Try to recover by syncing from kiro-cli
+        if (this.config.auto_sync_kiro_cli) {
+          showToast('All accounts unhealthy. Attempting recovery from Kiro CLI...', 'warning')
+          const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
+          await syncFromKiroCli()
+
+          // Reset all accounts to healthy and clear fail counts
+          const accounts = this.accountManager.getAccounts()
+          for (const acc of accounts) {
+            acc.isHealthy = true
+            acc.failCount = 0
+            acc.unhealthyReason = undefined
+          }
+          await this.repository.batchSave(accounts)
+
+          // Give it one more chance
+          continue
+        }
         throw new Error('All accounts are permanently unhealthy (quota exceeded or suspended)')
       }
 
