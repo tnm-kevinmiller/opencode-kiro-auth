@@ -31,6 +31,19 @@ export class AuthHandler {
         try {
           const logger = await import('../../plugin/logger.js')
           logger.log('Background token refresh starting...')
+
+          // Force kiro-cli to refresh its token first
+          try {
+            const { exec } = await import('node:child_process')
+            await new Promise<void>((resolve) => {
+              exec('kiro-cli whoami', (error) => {
+                resolve() // Continue even if it fails
+              })
+            })
+          } catch (e) {
+            // Silent fail - continue with sync anyway
+          }
+
           const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
           await syncFromKiroCli()
           logger.log('Background token refresh completed')

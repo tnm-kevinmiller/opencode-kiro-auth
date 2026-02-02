@@ -52,6 +52,19 @@ export class TokenRefresher {
     const now = Date.now()
     if (this.config.auto_sync_kiro_cli && now - this.lastSyncTime > this.SYNC_COOLDOWN_MS) {
       this.lastSyncTime = now
+
+      // Force kiro-cli to refresh its token first
+      try {
+        const { exec } = await import('node:child_process')
+        await new Promise<void>((resolve) => {
+          exec('kiro-cli whoami', (error) => {
+            resolve() // Continue even if it fails
+          })
+        })
+      } catch (e) {
+        // Silent fail - continue with sync anyway
+      }
+
       await this.syncFromKiroCli()
     }
 
