@@ -93,11 +93,9 @@ export class ErrorHandler {
       return { shouldRetry: true }
     }
 
-    if (
-      (response.status === 402 || response.status === 403) &&
-      this.accountManager.getAccountCount() > 1
-    ) {
-      let errorReason = response.status === 402 ? 'Quota' : 'Forbidden'
+    // Handle 403 Forbidden - might be invalid/stale token
+    if (response.status === 403) {
+      let errorReason = 'Forbidden'
       let isPermanent = false
       try {
         const errorBody = await response.text()
@@ -114,12 +112,30 @@ export class ErrorHandler {
           throw e
         }
       }
+
       if (isPermanent) {
         account.failCount = 10
+        this.accountManager.markUnhealthy(account, errorReason)
+        await this.repository.batchSave(this.accountManager.getAccounts())
+        if (this.accountManager.getAccountCount() > 1) {
+          showToast(`${errorReason} (${account.email}). Switching account...`, 'warning')
+          return { shouldRetry: true, switchAccount: true }
+        }
+        throw new Error(errorReason)
       }
-      this.accountManager.markUnhealthy(account, errorReason)
+
+      // For non-permanent 403, force token expiry to trigger refresh
+      account.expiresAt = 0
       await this.repository.batchSave(this.accountManager.getAccounts())
-      showToast(`${errorReason} (${account.email}). Switching account...`, 'warning')
+      showToast('Token expired. Refreshing...', 'info')
+      return { shouldRetry: true }
+    }
+
+    // Handle 402 Payment Required (quota exceeded)
+    if (response.status === 402 && this.accountManager.getAccountCount() > 1) {
+      this.accountManager.markUnhealthy(account, 'Quota')
+      await this.repository.batchSave(this.accountManager.getAccounts())
+      showToast(`Quota exceeded (${account.email}). Switching account...`, 'warning')
       return { shouldRetry: true, switchAccount: true }
     }
 
