@@ -14,6 +14,9 @@ interface TokenRefresherConfig {
 }
 
 export class TokenRefresher {
+  private lastSyncTime = 0
+  private readonly SYNC_COOLDOWN_MS = 5000 // Only sync once per 5 seconds
+
   constructor(
     private config: TokenRefresherConfig,
     private accountManager: AccountManager,
@@ -45,7 +48,10 @@ export class TokenRefresher {
     account: ManagedAccount,
     showToast: ToastFunction
   ): Promise<{ account: ManagedAccount; shouldContinue: boolean }> {
-    if (this.config.auto_sync_kiro_cli) {
+    // Only sync if cooldown period has passed
+    const now = Date.now()
+    if (this.config.auto_sync_kiro_cli && now - this.lastSyncTime > this.SYNC_COOLDOWN_MS) {
+      this.lastSyncTime = now
       await this.syncFromKiroCli()
     }
 
