@@ -63,6 +63,9 @@ export class AccountManager {
   getAccounts(): ManagedAccount[] {
     return [...this.accounts]
   }
+  replaceAccounts(newAccounts: ManagedAccount[]): void {
+    this.accounts = newAccounts
+  }
   shouldShowToast(debounce = 10000): boolean {
     if (Date.now() - this.lastToastTime < debounce) return false
     this.lastToastTime = Date.now()

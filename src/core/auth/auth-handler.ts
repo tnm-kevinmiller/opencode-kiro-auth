@@ -46,6 +46,14 @@ export class AuthHandler {
 
           const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
           await syncFromKiroCli()
+
+          // Reload accounts from database into memory
+          if (this.accountManager) {
+            this.repository.invalidateCache()
+            const freshAccounts = await this.repository.findAll()
+            this.accountManager.replaceAccounts(freshAccounts)
+          }
+
           logger.log('Background token refresh completed')
         } catch (e) {
           const logger = await import('../../plugin/logger.js')
