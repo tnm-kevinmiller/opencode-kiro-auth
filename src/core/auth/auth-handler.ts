@@ -29,10 +29,14 @@ export class AuthHandler {
     this.refreshTimer = setInterval(
       async () => {
         try {
+          const logger = await import('../../plugin/logger.js')
+          logger.log('Background token refresh starting...')
           const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
           await syncFromKiroCli()
+          logger.log('Background token refresh completed')
         } catch (e) {
-          // Silent fail - will retry in 15 minutes
+          const logger = await import('../../plugin/logger.js')
+          logger.warn('Background token refresh failed', e)
         }
       },
       15 * 60 * 1000
