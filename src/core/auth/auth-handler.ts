@@ -4,6 +4,7 @@ import { KiroCliAuthMethod } from './kiro-cli-auth-method.js'
 
 export class AuthHandler {
   private accountManager?: any
+  private refreshTimer?: NodeJS.Timeout
 
   constructor(
     private config: any,
@@ -13,6 +14,29 @@ export class AuthHandler {
   async initialize(): Promise<void> {
     const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
     await syncFromKiroCli()
+
+    // Start background token refresh every 15 minutes
+    this.startBackgroundRefresh()
+  }
+
+  private startBackgroundRefresh(): void {
+    // Clear existing timer if any
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer)
+    }
+
+    // Refresh every 15 minutes
+    this.refreshTimer = setInterval(
+      async () => {
+        try {
+          const { syncFromKiroCli } = await import('../../plugin/sync/kiro-cli.js')
+          await syncFromKiroCli()
+        } catch (e) {
+          // Silent fail - will retry in 15 minutes
+        }
+      },
+      15 * 60 * 1000
+    )
   }
 
   setAccountManager(am: any): void {
