@@ -66,7 +66,7 @@ export class TokenRefresher {
       stillAcc.unhealthyReason = undefined
       await this.repository.batchSave([stillAcc])
       showToast('Credentials recovered from Kiro CLI sync.', 'info')
-      return { account: stillAcc, shouldContinue: true }
+      return { account: stillAcc, shouldContinue: false }
     }
 
     if (
