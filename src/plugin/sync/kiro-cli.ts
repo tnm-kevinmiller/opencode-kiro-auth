@@ -187,6 +187,15 @@ export async function syncFromKiroCli() {
           }
         }
 
+        // Encode refresh token with client credentials for IDC
+        const { encodeRefreshToken } = await import('../../kiro/auth.js')
+        const encodedRefreshToken = encodeRefreshToken({
+          refreshToken,
+          clientId,
+          clientSecret,
+          authMethod: 'idc'
+        })
+
         await kiroDb.upsertAccount({
           id,
           email: resolvedEmail,
@@ -195,7 +204,7 @@ export async function syncFromKiroCli() {
           clientId,
           clientSecret,
           profileArn: tokenProfileArn,
-          refreshToken,
+          refreshToken: encodedRefreshToken,
           accessToken,
           expiresAt: tokenExpiresAt,
           rateLimitResetTime: 0,
