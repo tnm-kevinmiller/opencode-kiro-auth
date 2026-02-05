@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs'
 import { createDeterministicAccountId } from '../accounts'
 import * as logger from '../logger'
 import { kiroDb } from '../storage/sqlite'
-import { fetchUsageLimits } from '../usage'
 import {
   findClientCredsRecursive,
   getCliDbPath,
@@ -97,19 +96,14 @@ export async function syncFromKiroCli() {
             clientSecret,
             email: ''
           }
-          const u = await fetchUsageLimits(authForUsage)
-          usedCount = u.usedCount || 0
-          limitCount = u.limitCount || 0
-          if (typeof u.email === 'string' && u.email) {
-            email = u.email
-            usageOk = true
-          }
+          // Skip usage/email fetch for kiro-cli sync - it never works
+          // Just use placeholder email and default quota values
         } catch (e) {
-          logger.warn('Kiro CLI sync: failed to fetch usage/email; falling back', {
+          logger.warn('Kiro CLI sync: error during sync', {
             authMethod,
             region
           })
-          logger.debug('Kiro CLI sync: usage fetch error', e)
+          logger.debug('Kiro CLI sync: error', e)
         }
 
         const all = kiroDb.getAccounts()
